@@ -1,0 +1,267 @@
+<html>
+<!--
+
+Copyright (c) 2020 Robert Graves
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-->
+<head>
+    <title>Hubitat Dashboard Editor</title>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"
+        integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
+        integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
+    <style>
+        .dashboardSelectContainer {
+            position: absolute;
+            left: 40px;
+            top: 6px;
+            z-index: 6;
+        }
+    </style>
+    <script>
+
+        var api = {
+            dashboardAppId: null,
+            accessToken: null,
+            getDashboardUrl: function (id) { return `/apps/api/${this.dashboardAppId}/dashboard/${id}?access_token=${this.accessToken}`; },
+            getDashboardMenuUrl: function () { return `/apps/api/${this.dashboardAppId}/menu?access_token=${this.accessToken}`; },
+            getLayoutUrl: function (id) { return `/apps/api/${this.dashboardAppId}/dashboard/${id}/layout?access_token=${this.accessToken}`; },
+            getLayout: function (id) {
+                return $.getJSON(this.getLayoutUrl(id));
+            },
+            postLayout: function (layout, id) {
+                return $.ajax(this.getLayoutUrl(id), {
+                    data: JSON.stringify(layout),
+                    method: "POST",
+                    contentType: "application/json"
+                });
+            },
+            init: async function () {
+                // first figure out the app id of the dashboard and the user's access token
+                var dashboardsHtml = await $.get("/dashboards");
+                var re = /\/apps\/api\/(\d+)\/menu\?access_token=([\w-]+)/
+                var match = dashboardsHtml.match(re);
+                this.dashboardAppId = match[1];
+                this.accessToken = match[2];
+
+                // now get the list of the dashboards
+                var menuHtml = await $.get(this.getDashboardMenuUrl());
+                re = /var dashboardsJson = (.+)/
+                match = menuHtml.match(re);
+                this.dashboards = JSON.parse(match[1]);
+            }
+        }
+
+        var dashboardEditor = {
+            init: function () {
+                var that = this;
+                this.appObserver = new MutationObserver(this.appNodeMutated);
+                this.wrapperObserver = new MutationObserver(this.wrapperNodeMutated);
+
+                if (window.location.hash) {
+                    var id = parseInt(window.location.hash.substr(1));
+                    this.selectedDashboard = api.dashboards.find(x => x.id == id);
+                }
+                else {
+                    this.selectedDashboard = api.dashboards[0];
+                }
+
+                for (var dash of api.dashboards) {
+                    var option = $('<option>').val(dash.id).text(dash.label);
+                    $("#dashboardSelect").append(option);
+                }
+
+                $("#dashboardSelect").val(this.selectedDashboard.id);
+                $("#dashboardSelect").selectmenu({
+                    change: function (event, ui) {
+                        that.selectedDashboard = api.dashboards.find(x => x.id == ui.item.value);
+                        that.wrapperObserver.disconnect();
+                        window.history.pushState(null, null, `${window.location.origin}${window.location.pathname}#${that.selectedDashboard.id}`);
+                        $("#dashboardIFrame").attr('src', api.getDashboardUrl(that.selectedDashboard.id));
+                    }
+                });
+                $("#dashboardIFrame").attr('src', api.getDashboardUrl(this.selectedDashboard.id));
+            },
+
+            iframeLoaded: function () {
+                // Load event fires multiple times.  Only interested once #app exists.
+                if ($("#dashboardIFrame").contents().find("#app").length === 1) {
+                    this.iframeIsReady();
+                }
+            },
+
+            iframeIsReady: function () {
+                var appNode = $("#dashboardIFrame").contents().find("#app")[0];
+                this.appObserver.observe(appNode, {
+                    attributes: false,
+                    childList: true,
+                    characterData: false
+                });
+            },
+
+            appNodeMutated: function (mutations) {
+                // this only happens once when the app is loaded
+                dashboardEditor.appObserver.disconnect();
+                var wrapperNode = $("#dashboardIFrame").contents().find(".wrapper")[0];
+                dashboardEditor.wrapperObserver.observe(wrapperNode, {
+                    attributes: false,
+                    childList: true,
+                    characterData: false
+                });
+
+                var checknode = $("#dashboardIFrame").contents().find(".header span:last-child span:first-child");
+                var editNode = $('<span class="flex cursor-pointer px-1" id="editMapButton"><i class="material-icons"> edit </i></span>');
+                editNode.click(dashboardEditor.enableMapEdit);
+                editNode.insertBefore(checknode);
+                var saveNode = $('<span class="flex cursor-pointer px-1" id="saveMapButton"><i class="material-icons"> save </i></span>');
+                saveNode.hide();
+                saveNode.click(dashboardEditor.saveMapEdit);
+                saveNode.insertBefore(checknode);
+                var cancelNode = $('<span class="flex cursor-pointer px-1" id="cancelMapButton"><i class="material-icons"> clear </i></span>');
+                cancelNode.hide();
+                cancelNode.click(dashboardEditor.cancelMapEdit);
+                cancelNode.insertBefore(checknode);
+            },
+
+            wrapperNodeMutated: function (mutations) {
+                if (mutations[0].addedNodes.length) {
+                    var addedNode = mutations[0].addedNodes[0];
+                    addedNode.style.top = "50%";
+                    addedNode.style.left = "50%";
+                    console.log(addedNode);
+                }
+            },
+
+            enableMapEdit: function () {
+                $("#dashboardIFrame").contents().find("#editMapButton").hide();
+                $("#dashboardIFrame").contents().find("#saveMapButton").show();
+                $("#dashboardIFrame").contents().find("#cancelMapButton").show();
+                var tiles = $("#dashboardIFrame").contents().find(".tile");
+                tiles.draggable({
+                    start: function (event, ui) {
+                        var element = ui.helper[0];
+                        // hide the tile-primary element to prevent the click turning on/off lights while dragging them
+                        $(element).find(".tile-primary").css("visibility", "hidden");
+                        element.style.transform = "unset";
+
+                        
+                    },
+                    stop: function (event, ui) {
+                        var element = ui.helper[0];
+                        $(element).find(".tile-primary").css("visibility", "visible");
+                        element.style.top = `${parseFloat(element.style.top) + (parseFloat(window.getComputedStyle(element).height) / 2)}px`;
+                        element.style.left = `${parseFloat(element.style.left) + (parseFloat(window.getComputedStyle(element).width) / 2)}px`;
+                        element.style.transform = "translate(-50%, -50%)";
+                        element.moved = true;
+                    }
+                });
+            },
+
+            saveMapEdit: async function () {
+                var iframe = $("#dashboardIFrame").contents();
+                iframe.find("#editMapButton").show();
+                iframe.find("#saveMapButton").hide();
+                iframe.find("#cancelMapButton").hide();
+                var tiles = iframe.find(".tile");
+                tiles.draggable("disable");
+                tiles.draggable("destroy");
+                // tiles.find('.tile-primary').off("click");
+                var cssCommonRules = `.header { position: absolute; width: 100%; }
+.header span:last-child span { z-index: 5; }
+.dashBack { z-index: 5; cursor: pointer; }
+.wrapper { height: 100vh; width: 100vw; margin: 0px !important; }
+.tile { grid-area: unset !important; position: absolute; transform: translate(-50%, -50%); overflow: unset !important; }
+.tile-title { position:absolute; background: inherit; transform: translate(-50%, 0%); left: 50% !important; bottom: unset !important; right: unset !important; top: -2em; width: max-content; visibility: hidden }
+.tile:hover .tile-title { visibility: visible; }
+.vue-slider:hover { width: 10em !important; }
+`;
+
+                var tilesCss = '';
+                var iFrameDoc = document.getElementById('dashboardIFrame').contentWindow.document;
+                var screenHeight = iFrameDoc.body.clientHeight;
+                var screenWidth = iFrameDoc.body.clientWidth;
+                var customStyleSheet = iFrameDoc.styleSheets[iFrameDoc.styleSheets.length - 1];
+                cssRuleMap = {};
+                for (var rule of customStyleSheet.cssRules) {
+                    cssRuleMap[rule.selectorText] = rule;
+                }
+
+                tiles.each(function (idx) {
+                    var name = $(this).find(".tile-title").first().text();
+                    var pos = $(this).position();
+                    var compStyle = window.getComputedStyle(this);
+                    var tileHeight = parseFloat(compStyle.height);
+                    var tielWidth = parseFloat(compStyle.width);
+                    var top = ((tileHeight / 2) + pos.top) / screenHeight;
+                    var left = ((tielWidth / 2) + pos.left) / screenWidth;
+                    // move it to the middel of the screen if it is off screen
+                    if (top < 0) { top = 0.5; }
+                    if (left < 0) { left = 0.5; }
+                    tilesCss += `/* ${name} */\n#${this.id} { top: ${top * 100}%; left: ${left * 100}%; }\n`;
+                });
+
+                var data = await api.getLayout(dashboardEditor.selectedDashboard.id);
+                data.customCSS = cssCommonRules + tilesCss;
+                await api.postLayout(data, dashboardEditor.selectedDashboard.id);
+                dashboardEditor.wrapperObserver.disconnect();
+                $('#dashboardIFrame')[0].contentWindow.location.reload(true);
+            },
+
+            cancelMapEdit: function () {
+                $("#dashboardIFrame").contents().find("#editMapButton").show();
+                $("#dashboardIFrame").contents().find("#saveMapButton").hide();
+                $("#dashboardIFrame").contents().find("#cancelMapButton").hide();
+                dashboardEditor.wrapperObserver.disconnect();
+                $('#dashboardIFrame')[0].contentWindow.location.reload(true);
+            }
+        };
+
+        $(document).ready(async function () {
+            await api.init();
+            dashboardEditor.init();
+        });
+
+
+    </script>
+    <style>
+        html,
+        body {
+            margin: 0px;
+        }
+
+        iframe {
+            height: 100%;
+            width: 100%;
+            border-width: 0px;
+        }
+    </style>
+</head>
+
+<body>
+    <span class="dashboardSelectContainer">
+        <select id="dashboardSelect">
+        </select>
+    </span>
+    <iframe id="dashboardIFrame" onload="dashboardEditor.iframeLoaded()"></iframe>
+</body>
+
+</html>
