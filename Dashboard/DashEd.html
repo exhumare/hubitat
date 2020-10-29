@@ -211,13 +211,17 @@ SOFTWARE.
                     var pos = $(this).position();
                     var compStyle = window.getComputedStyle(this);
                     var tileHeight = parseFloat(compStyle.height);
-                    var tielWidth = parseFloat(compStyle.width);
-                    var top = ((tileHeight / 2) + pos.top) / screenHeight;
-                    var left = ((tielWidth / 2) + pos.left) / screenWidth;
+                    var tileWidth = parseFloat(compStyle.width);
+                    var topPercent = ((tileHeight / 2) + pos.top) / screenHeight;
+                    var leftPercent = ((tileWidth / 2) + pos.left) / screenWidth;
+                    var heightPercent = tileHeight / screenHeight;
+                    var widthPercent = tileWidth / screenWidth;
                     // move it to the middel of the screen if it is off screen
-                    if (top < 0) { top = 0.5; }
-                    if (left < 0) { left = 0.5; }
-                    tilesCss += `/* ${name} */\n#${this.id} { top: ${top * 100}%; left: ${left * 100}%; }\n`;
+                    if (topPercent < 0) { topPercent = 0.5; }
+                    if (leftPercent < 0) { leftPercent = 0.5; }
+                    if (heightPercent <= 0) { heightPercent = 0.05; }
+                    if (widthPercent < 0) { widthPercent = 0.05; }
+                    tilesCss += `/* ${name} */\n#${this.id} { top: ${topPercent * 100}%; left: ${leftPercent * 100}%; height: ${heightPercent * 100}%; width: ${widthPercent * 100}%; }\n`;
                 });
 
                 var data = await api.getLayout(dashboardEditor.selectedDashboard.id);
