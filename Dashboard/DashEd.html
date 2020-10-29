@@ -102,6 +102,20 @@ SOFTWARE.
                 $("#dashboardIFrame").attr('src', api.getDashboardUrl(this.selectedDashboard.id));
             },
 
+            cssCommonRules: `.header { position: absolute; width: 100%; }
+.header span:last-child span { z-index: 5; }
+.dashBack { z-index: 5; cursor: pointer; }
+.wrapper { height: 100vh; width: 100vw; margin: 0px !important; }
+.tile { grid-area: unset !important; position: absolute !important; transform: translate(-50%, -50%); overflow: unset !important; }
+.tile-title { position:absolute; background: inherit; transform: translate(-50%, 0%); left: 50% !important; bottom: unset !important; right: unset !important; top: -2em; width: max-content; visibility: hidden }
+.tile-contents { height: unset; width: unset; display: block; }
+.tile-primary { width: unset; display: block; }
+.tile-secondary { position: unset; width: unset; }
+.tile-tertiary { position: unset; text-align: unset; }
+.tile:hover .tile-title { visibility: visible; }
+.vue-slider:hover { width: 10em !important; }
+`,
+
             iframeLoaded: function () {
                 // Load event fires multiple times.  Only interested once #app exists.
                 if ($("#dashboardIFrame").contents().find("#app").length === 1) {
@@ -152,18 +166,19 @@ SOFTWARE.
             },
 
             enableMapEdit: function () {
+                var jqueryUiCss = $('<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">');
+                $("#dashboardIFrame").contents().find("head").append(jqueryUiCss);
+                $("#dashboardIFrame").contents().find("head").append($(`<style>${dashboardEditor.cssCommonRules}</style>`));
                 $("#dashboardIFrame").contents().find("#editMapButton").hide();
                 $("#dashboardIFrame").contents().find("#saveMapButton").show();
                 $("#dashboardIFrame").contents().find("#cancelMapButton").show();
                 var tiles = $("#dashboardIFrame").contents().find(".tile");
-                tiles.draggable({
+                tiles.resizable().draggable({
                     start: function (event, ui) {
                         var element = ui.helper[0];
                         // hide the tile-primary element to prevent the click turning on/off lights while dragging them
                         $(element).find(".tile-primary").css("visibility", "hidden");
                         element.style.transform = "unset";
-
-                        
                     },
                     stop: function (event, ui) {
                         var element = ui.helper[0];
@@ -185,25 +200,11 @@ SOFTWARE.
                 tiles.draggable("disable");
                 tiles.draggable("destroy");
                 // tiles.find('.tile-primary').off("click");
-                var cssCommonRules = `.header { position: absolute; width: 100%; }
-.header span:last-child span { z-index: 5; }
-.dashBack { z-index: 5; cursor: pointer; }
-.wrapper { height: 100vh; width: 100vw; margin: 0px !important; }
-.tile { grid-area: unset !important; position: absolute; transform: translate(-50%, -50%); overflow: unset !important; }
-.tile-title { position:absolute; background: inherit; transform: translate(-50%, 0%); left: 50% !important; bottom: unset !important; right: unset !important; top: -2em; width: max-content; visibility: hidden }
-.tile:hover .tile-title { visibility: visible; }
-.vue-slider:hover { width: 10em !important; }
-`;
 
                 var tilesCss = '';
                 var iFrameDoc = document.getElementById('dashboardIFrame').contentWindow.document;
                 var screenHeight = iFrameDoc.body.clientHeight;
                 var screenWidth = iFrameDoc.body.clientWidth;
-                var customStyleSheet = iFrameDoc.styleSheets[iFrameDoc.styleSheets.length - 1];
-                cssRuleMap = {};
-                for (var rule of customStyleSheet.cssRules) {
-                    cssRuleMap[rule.selectorText] = rule;
-                }
 
                 tiles.each(function (idx) {
                     var name = $(this).find(".tile-title").first().text();
@@ -220,7 +221,7 @@ SOFTWARE.
                 });
 
                 var data = await api.getLayout(dashboardEditor.selectedDashboard.id);
-                data.customCSS = cssCommonRules + tilesCss;
+                data.customCSS = dashboardEditor.cssCommonRules + tilesCss;
                 await api.postLayout(data, dashboardEditor.selectedDashboard.id);
                 dashboardEditor.wrapperObserver.disconnect();
                 $('#dashboardIFrame')[0].contentWindow.location.reload(true);

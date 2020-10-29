@@ -19,9 +19,8 @@ I strongly recommend using SVG images to allow them to scale to different screen
 * Open http://{hubitat ip address}/local/DashEd.html
 * Select the dashboard you wish to edit in the top left dropdown.
 * In the top right corner, start edit mode by clicking the new edit icon in the top right corner.
-    * If this is the first time editing a dashboard, click the save icon once to get a base CSS set.
-    * Then click the edit button again
 * Add a tile using the normal tile add process.  The tile should appear in the middle of the screen.
 * Drag the tile to the desired location
+* Resize the tile
 * Repeat
 * Click the save icon in the top right corner
