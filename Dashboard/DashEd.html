@@ -108,10 +108,10 @@ SOFTWARE.
 .wrapper { height: 100vh; width: 100vw; margin: 0px !important; }
 .tile { grid-area: unset !important; position: absolute !important; transform: translate(-50%, -50%); overflow: unset !important; }
 .tile-title { position:absolute; background: inherit; transform: translate(-50%, 0%); left: 50% !important; bottom: unset !important; right: unset !important; top: -2em; width: max-content; visibility: hidden }
-.tile-contents { height: unset; width: unset; display: block; }
-.tile-primary { width: unset; display: block; }
-.tile-secondary { position: unset; width: unset; }
-.tile-tertiary { position: unset; text-align: unset; }
+.tile-contents { height: 100%; width: 100%; }
+.tile-primary { height: 100%; overflow: unset; }
+.tile-secondary { position: unset; display: table-row; }
+.tile-tertiary { position: unset; text-align: unset; display: table-row; }
 .tile:hover .tile-title { visibility: visible; }
 .vue-slider:hover { width: 10em !important; }
 `,
@@ -220,8 +220,8 @@ SOFTWARE.
                     if (topPercent < 0) { topPercent = 0.5; }
                     if (leftPercent < 0) { leftPercent = 0.5; }
                     if (heightPercent <= 0) { heightPercent = 0.05; }
-                    if (widthPercent < 0) { widthPercent = 0.05; }
-                    tilesCss += `/* ${name} */\n#${this.id} { top: ${topPercent * 100}%; left: ${leftPercent * 100}%; height: ${heightPercent * 100}%; width: ${widthPercent * 100}%; }\n`;
+                    if (widthPercent <= 0) { widthPercent = 0.05; }
+                    tilesCss += `/* ${name} */\n#${this.id} { top: ${topPercent * 100}%; left: ${leftPercent * 100}%; min-height: ${heightPercent * 100}%; min-width: ${widthPercent * 100}%; }\n`;
                 });
 
                 var data = await api.getLayout(dashboardEditor.selectedDashboard.id);
